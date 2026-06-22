@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GHOST COMMANDER (REALTIME)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body{background:#050505;color:#ccc;font-family:'Inter',sans-serif} 
+        ::-webkit-scrollbar{width:6px; height:6px; background:#000} 
+        ::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
+        .transition-cards { transition: all 0.3s ease; }
+        
+        @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes slideInUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; transform: scale(0.95); } }
+        .toast-enter { animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .toast-enter-mobile { animation: slideInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .toast-leave { animation: fadeOut 0.3s ease forwards; }
+
+        .grid-dynamic {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: repeat(1, minmax(0, 1fr));
+        }
+        @media (min-width: 640px) { .grid-dynamic { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (min-width: 1024px) { .grid-dynamic { grid-template-columns: repeat(var(--ghost-grid, 6), minmax(0, 1fr)); } }
+
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="p-3 md:p-6 lg:p-8 min-h-screen relative overflow-x-hidden pb-44 md:pb-32">
+    <div class="max-w-7xl mx-auto">
+        
+        <div class="sticky top-0 z-40 bg-[#050505]/95 backdrop-blur-md border-b border-gray-800 pb-3 md:pb-4 mb-4 md:mb-6 pt-2">
+            <div class="flex justify-between items-center gap-2 md:gap-4">
+                <div class="flex-1 truncate">
+                    <h1 class="text-xl md:text-3xl font-black text-white tracking-tighter flex items-center gap-1.5 md:gap-2">
+                        GHOST <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-500">CMD</span>
+                        <span id="live-indicator" class="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-red-500 ml-1 md:ml-2 shrink-0 animate-pulse" title="Panel Status"></span>
+                    </h1>
+                    <p id="header-stats" class="text-[9px] md:text-[11px] text-gray-500 font-mono mt-0.5 md:mt-1 truncate">
+                        ON: <span class="text-green-500 font-bold" id="stat-online">0</span> | 
+                        BUSY: <span class="text-yellow-500 font-bold" id="stat-busy">0</span> | 
+                        DATA: <span class="text-blue-500 font-bold" id="stat-data">0</span>
+                        <span class="hidden sm:inline text-green-600 font-bold"> BY DOTAJA </span>
+                    </p>
+                </div>
+                <div>
+                    <button onclick="reloadData()" class="text-[9px] md:text-[10px] text-gray-500 hover:text-white hover:bg-indigo-900/30 border border-gray-800 hover:border-indigo-900/50 px-2 py-1.5 md:px-3 md:py-2 rounded-lg transition">🔄 SYNC</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="cards-container" class="grid-dynamic transition-cards"></div>
+
+        <div class="h-48 md:h-32 w-full flex items-center justify-center">
+            <span class="text-[10px] text-gray-700 font-mono tracking-widest">--- END OF SLOTS ---</span>
+        </div>
+    </div>
+
+    <!-- Bottom Controls -->
+    <div class="fixed bottom-4 md:bottom-6 left-1/2 transform -translate-x-1/2 z-50 w-[95%] max-w-4xl">
+        <div class="bg-[#0a0a0a]/90 backdrop-blur-xl border border-white/10 p-2 md:p-3 rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.8)] flex overflow-x-auto hide-scrollbar gap-2 md:justify-center md:flex-wrap items-center">
+            
+            <button onclick="toggleSelectAll()" id="select-all-btn" class="shrink-0 flex-1 min-w-[65px] bg-black/50 hover:bg-gray-800 border border-gray-700/50 text-gray-400 px-2 py-2.5 rounded-xl text-[10px] font-bold transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1 group">
+                <span class="text-sm group-hover:scale-110 transition-transform">🔲</span>
+                <span class="tracking-wider">ALL</span>
+            </button>
+
+            <button onclick="massCmd('login')" class="shrink-0 flex-1 min-w-[70px] bg-gradient-to-t from-blue-900 to-blue-700 hover:from-blue-800 hover:to-blue-600 border border-blue-600/30 text-white px-2 py-2.5 rounded-xl text-[10px] font-bold transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1 group">
+                <span class="text-sm group-hover:-translate-y-0.5 transition-transform">🚀</span>
+                <span class="tracking-wider">LOGIN</span>
+            </button>
+            <button onclick="massCmd('loop')" class="shrink-0 flex-1 min-w-[70px] bg-gradient-to-t from-purple-900 to-purple-700 hover:from-purple-800 hover:to-purple-600 border border-purple-600/30 text-white px-2 py-2.5 rounded-xl text-[10px] font-bold transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1 group">
+                <span class="text-sm group-hover:-rotate-90 transition-transform duration-300">🔄</span>
+                <span class="tracking-wider">LOOP</span>
+            </button>
+            <button onclick="massCmd('stop')" class="shrink-0 flex-1 min-w-[70px] bg-gradient-to-t from-red-950 to-red-800 border border-red-700/50 hover:from-red-900 hover:to-red-700 text-white px-2 py-2.5 rounded-xl text-[10px] font-bold transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1 group">
+                <span class="text-sm group-hover:scale-110 transition-transform">🛑</span>
+                <span class="tracking-wider">STOP</span>
+            </button>
+            
+            <div class="shrink-0 w-[1px] h-10 bg-white/10 mx-0.5"></div>
+            
+            <button onclick="massCmd('sync')" class="shrink-0 flex-1 min-w-[70px] bg-gradient-to-t from-cyan-900 to-cyan-700 hover:from-cyan-800 hover:to-cyan-600 border border-cyan-600/30 text-white px-2 py-2.5 rounded-xl text-[10px] font-bold transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1 group">
+                <span class="text-sm group-hover:-translate-y-0.5 transition-transform">📡</span>
+                <span class="tracking-wider">SYNC</span>
+            </button>
+            
+            <button onclick="openBulkModal()" class="shrink-0 flex-1 min-w-[70px] bg-gradient-to-t from-emerald-900 to-emerald-700 hover:from-emerald-800 hover:to-emerald-600 border border-emerald-600/30 text-white px-2 py-2.5 rounded-xl text-[10px] font-bold transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1 group">
+                <span class="text-sm group-hover:scale-110 transition-transform">📦</span>
+                <span class="tracking-wider">BULK</span>
+            </button>
+            <button onclick="massCmd('clean')" class="shrink-0 flex-1 min-w-[70px] bg-black/50 hover:bg-orange-950/80 border border-orange-900/30 text-orange-500 hover:text-orange-400 px-2 py-2.5 rounded-xl text-[10px] font-bold transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1 group">
+                <span class="text-sm group-hover:scale-110 transition-transform">🧹</span>
+                <span class="tracking-wider">PURGE</span>
+            </button>
+            
+            <div class="shrink-0 w-[1px] h-10 bg-white/10 mx-0.5 hidden md:block"></div>
+
+            <button onclick="changeSlots()" class="shrink-0 flex-1 min-w-[70px] bg-black/50 hover:bg-gray-800 border border-gray-700/50 text-gray-300 px-2 py-2.5 rounded-xl text-[10px] font-bold transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1 group">
+                <span class="text-sm group-hover:rotate-90 transition-transform duration-300">⚙️</span>
+                <span class="tracking-wider">MAX: 192</span>
+            </button>
+            <button onclick="changeGrid()" class="shrink-0 flex-1 min-w-[70px] hidden md:flex bg-black/50 hover:bg-gray-800 border border-gray-700/50 text-gray-300 px-2 py-2.5 rounded-xl text-[10px] font-bold transition-all shadow-lg active:scale-95 flex-col items-center justify-center gap-1 group">
+                <span class="text-sm group-hover:rotate-180 transition-transform duration-300">📱</span>
+                <span id="grid-display" class="tracking-wider">GRID: 6</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-2 md:top-6 right-2 md:right-6 left-2 md:left-auto z-[100] flex flex-col gap-3 pointer-events-none"></div>
+
+    <!-- Custom Confirm -->
+    <div id="custom-confirm" class="hidden fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-opacity">
+        <div class="bg-[#111] border border-gray-800 rounded-2xl w-full max-w-sm flex flex-col shadow-2xl overflow-hidden transform scale-95 transition-transform duration-200" id="confirm-box">
+            <div class="p-6 text-center">
+                <div id="confirm-icon" class="text-5xl mb-4">⚠️</div>
+                <h3 id="confirm-title" class="font-black text-white text-xl mb-2 tracking-tight">Konfirmasi</h3>
+                <p id="confirm-msg" class="text-xs text-gray-400 leading-relaxed"></p>
+            </div>
+            <div class="flex border-t border-gray-800">
+                <button id="btn-confirm-no" class="flex-1 py-4 text-xs font-bold text-gray-400 hover:bg-gray-800 hover:text-white transition uppercase tracking-wider">Batal</button>
+                <button id="btn-confirm-yes-color" class="flex-1 py-4 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-500 transition uppercase tracking-wider">Lanjutkan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Slot Modal -->
+    <div id="modal" class="hidden fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-3 md:p-4 backdrop-blur-sm transition-opacity">
+        <div class="bg-[#111] border border-gray-800 rounded-2xl w-full max-w-2xl flex flex-col max-h-[90vh] shadow-2xl overflow-hidden">
+            <div class="p-4 border-b border-gray-800 flex justify-between items-center bg-[#151515]">
+                <h3 class="font-bold text-white text-sm md:text-base flex items-center gap-2">
+                    ✏️ Edit Data Slot <span id="m_slot" class="text-indigo-400 font-black text-lg bg-indigo-900/30 px-2 rounded"></span>
+                </h3>
+                <button onclick="closeModal()" class="text-gray-500 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition">✕</button>
+            </div>
+            <div class="p-4 md:p-5 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 bg-[#0a0a0a]">
+                <div class="flex flex-col relative group">
+                    <label class="text-[10px] font-black text-blue-500 mb-2 tracking-widest uppercase flex items-center gap-1"><span>📧</span> Daftar Email</label>
+                    <textarea id="m_emails" class="flex-1 min-h-[150px] md:min-h-[200px] bg-black border border-gray-800 focus:border-blue-500 rounded-xl p-3 text-xs text-gray-300 resize-none outline-none font-mono transition group-hover:border-blue-900/50"></textarea>
+                </div>
+                <div class="flex flex-col relative group">
+                    <label class="text-[10px] font-black text-purple-500 mb-2 tracking-widest uppercase flex items-center gap-1"><span>🔗</span> Link Target</label>
+                    <textarea id="m_links" class="flex-1 min-h-[150px] md:min-h-[200px] bg-black border border-gray-800 focus:border-purple-500 rounded-xl p-3 text-xs text-gray-300 resize-none outline-none font-mono transition group-hover:border-purple-900/50"></textarea>
+                </div>
+            </div>
+            <div class="p-4 border-t border-gray-800 flex flex-col md:flex-row gap-3 bg-[#151515]">
+                <button onclick="closeModal()" class="px-4 border border-gray-700 hover:bg-gray-800 text-gray-400 py-3 rounded-xl text-xs font-bold transition active:scale-[0.98] w-full md:w-auto">BATAL</button>
+                <button onclick="save()" id="btnSave" class="flex-1 bg-gradient-to-r from-indigo-700 to-purple-700 hover:from-indigo-600 hover:to-purple-600 text-white py-3 rounded-xl text-xs font-bold transition shadow-lg active:scale-[0.98] w-full">SIMPAN DATA</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Modal -->
+    <div id="bulkModal" class="hidden fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-3 md:p-4 backdrop-blur-sm transition-opacity">
+        <div class="bg-[#111] border border-emerald-900/50 rounded-2xl w-full max-w-lg flex flex-col shadow-2xl overflow-hidden">
+            <div class="p-4 border-b border-gray-800 flex justify-between items-center bg-[#0d1612]">
+                <h3 class="font-bold text-white text-sm md:text-base flex items-center gap-2">📦 Bulk Uploader</h3>
+                <button onclick="closeBulkModal()" class="text-gray-500 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition">✕</button>
+            </div>
+            <div class="p-4 md:p-6 bg-[#050a07] space-y-4 md:space-y-6">
+                <div class="flex flex-col gap-3">
+                    <label class="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Pilih Slot Target:</label>
+                    <div id="bulk-slot-list" class="max-h-[150px] overflow-y-auto space-y-2 border border-emerald-900/30 rounded-lg p-3 bg-black/40"></div>
+                </div>
+                <div class="flex flex-col gap-3">
+                    <label class="text-[10px] font-black text-blue-500 uppercase tracking-widest">📧 Email (1 per baris):</label>
+                    <textarea id="bulk-emails" class="h-[100px] bg-black border border-blue-900/50 focus:border-blue-500 rounded-lg p-3 text-xs text-gray-300 resize-none outline-none font-mono"></textarea>
+                </div>
+                <div class="flex flex-col gap-3">
+                    <label class="text-[10px] font-black text-purple-500 uppercase tracking-widest">🔗 Link (1 per baris):</label>
+                    <textarea id="bulk-links" class="h-[100px] bg-black border border-purple-900/50 focus:border-purple-500 rounded-lg p-3 text-xs text-gray-300 resize-none outline-none font-mono"></textarea>
+                </div>
+            </div>
+            <div class="p-4 border-t border-gray-800 bg-[#0d1612]">
+                <button onclick="saveBulk()" id="btnBulkSave" class="w-full bg-gradient-to-r from-emerald-700 to-green-700 hover:from-emerald-600 hover:to-green-600 text-white py-3.5 rounded-xl text-xs font-bold transition shadow-lg active:scale-[0.98]">UPLOAD KE SLOT</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log Modal -->
+    <div id="logModal" class="hidden fixed inset-0 z-[70] flex items-center justify-center bg-black/95 p-3 md:p-4 backdrop-blur-sm">
+        <div class="bg-[#0d1117] border border-gray-800 rounded-2xl w-full max-w-4xl h-[80vh] md:h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="p-3 border-b border-gray-800 flex justify-between bg-[#161b22]">
+                <div class="text-xs font-mono text-green-500 flex items-center gap-2 px-2">
+                    <span class="animate-pulse">▶</span> root@ghost:~# view_logs
+                </div>
+                <button onclick="closeLogModal()" class="text-gray-500 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition">✕</button>
+            </div>
+            <pre id="logContent" class="flex-1 p-3 md:p-5 overflow-auto font-mono text-[9px] md:text-[11px] text-gray-300 leading-relaxed whitespace-pre-wrap break-all bg-[#0a0a0a]"></pre>
+        </div>
+    </div>
+
+    <script>
+        // ==================== KONSTANTA & STATE ====================
+        const AUTH = "GHOST_SECRET_2026"; 
+        const API_BASE = window.location.origin;
+        let currentSlot = 0;
+        let isModalOpen = false;
+        let checkedSlots = new Set();
+        let currentGrid = localStorage.getItem('ghost_grid') || 6;
+        let allSlots = [];
+        document.documentElement.style.setProperty('--ghost-grid', currentGrid);
+
+        // ==================== HELPER FUNCTIONS ====================
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            let colors = "bg-[#161b22]/95 backdrop-blur border-green-500/50 text-green-400";
+            let icon = "✓";
+            if (type === 'error') { colors = "bg-[#2d0a0f]/95 backdrop-blur border-red-500/50 text-red-400"; icon = "✕"; }
+            if (type === 'warning') { colors = "bg-[#291e00]/95 backdrop-blur border-yellow-500/50 text-yellow-400"; icon = "⚠️"; }
+            if (type === 'info') { colors = "bg-[#0a192f]/95 backdrop-blur border-blue-500/50 text-blue-400"; icon = "ℹ️"; }
+
+            const isMobile = window.innerWidth < 768;
+            const enterClass = isMobile ? 'toast-enter-mobile' : 'toast-enter';
+            
+            toast.className = `flex items-center gap-3 px-4 py-3 md:px-5 md:py-4 rounded-xl md:rounded-2xl border ${colors} shadow-2xl pointer-events-auto ${enterClass}`;
+            toast.innerHTML = `<div class="font-bold text-lg md:text-xl">${icon}</div><div class="text-[10px] md:text-xs font-medium text-white tracking-wide">${message}</div>`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.replace(enterClass, 'toast-leave');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        function showConfirm(title, message, isDanger = true) {
+            return new Promise((resolve) => {
+                isModalOpen = true;
+                const modal = document.getElementById('custom-confirm');
+                const box = document.getElementById('confirm-box');
+                document.getElementById('confirm-title').innerText = title;
+                document.getElementById('confirm-msg').innerHTML = message;
+                const btnYes = document.getElementById('btn-confirm-yes-color');
+                btnYes.className = isDanger 
+                    ? "flex-1 py-4 text-xs font-black text-white bg-red-900/80 hover:bg-red-700 transition uppercase tracking-wider" 
+                    : "flex-1 py-4 text-xs font-black text-white bg-indigo-700 hover:bg-indigo-600 transition uppercase tracking-wider";
+                modal.classList.remove('hidden');
+                setTimeout(() => box.classList.replace('scale-95', 'scale-100'), 10);
+                const cleanup = () => {
+                    box.classList.replace('scale-100', 'scale-95');
+                    setTimeout(() => { modal.classList.add('hidden'); isModalOpen = false; }, 200);
+                };
+                document.getElementById('btn-confirm-yes-color').onclick = () => { cleanup(); resolve(true); };
+                document.getElementById('btn-confirm-no').onclick = () => { cleanup(); resolve(false); };
+            });
+        }
+
+        function closeModal() { document.getElementById('modal').classList.add('hidden'); isModalOpen = false; }
+        function closeLogModal() { document.getElementById('logModal').classList.add('hidden'); isModalOpen = false; }
+        function openBulkModal() { isModalOpen = true; renderBulkModal(); document.getElementById('bulkModal').classList.remove('hidden'); }
+        function closeBulkModal() { isModalOpen = false; document.getElementById('bulkModal').classList.add('hidden'); }
+
+        function updateSelectionUI() {
+            const selectBtn = document.getElementById('select-all-btn');
+            if (!selectBtn) return;
+            const checkboxes = document.querySelectorAll('.slot-cb');
+            if (checkedSlots.size > 0) {
+                const isAll = Array.from(checkboxes).every(cb => cb.checked);
+                selectBtn.innerHTML = `<span class="text-sm group-hover:scale-110 transition-transform">${isAll ? '☑️' : '✅'}</span><span class="tracking-wider font-black text-indigo-400">(${checkedSlots.size})</span>`;
+                selectBtn.classList.add('border-indigo-500/50', 'text-indigo-400', 'bg-indigo-900/30');
+            } else {
+                selectBtn.innerHTML = `<span class="text-sm group-hover:scale-110 transition-transform">🔲</span><span class="tracking-wider font-bold">ALL</span>`;
+                selectBtn.classList.remove('border-indigo-500/50', 'text-indigo-400', 'bg-indigo-900/30');
+            }
+        }
+
+        function toggleSelectAll() {
+            const checkboxes = document.querySelectorAll('.slot-cb');
+            if (checkboxes.length === 0) return;
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+            checkboxes.forEach(cb => {
+                cb.checked = !allChecked;
+                const val = parseInt(cb.value);
+                if (!allChecked) checkedSlots.add(val);
+                else checkedSlots.delete(val);
+            });
+            updateSelectionUI();
+        }
+
+        function restoreCheckboxes() {
+            document.querySelectorAll('.slot-cb').forEach(cb => {
+                cb.checked = checkedSlots.has(parseInt(cb.value));
+            });
+            updateSelectionUI();
+        }
+
+        // ==================== RENDER FUNCTIONS ====================
+        async function renderCards() {
+            const container = document.getElementById('cards-container');
+            container.innerHTML = '';
+
+            allSlots.forEach(slot => {
+                const cardHTML = `
+                <div class="relative bg-[#111] ${slot.isOffline ? 'border-gray-800/60 bg-[#0b0c10]' : 'border-purple-900/60'} rounded-2xl p-4 md:p-5 shadow-lg hover:shadow-2xl transition-all duration-300 flex flex-col justify-between group border">
+                    <div>
+                        <div class="flex justify-between items-start mb-3">
+                            <div class="w-full overflow-hidden">
+                                <div class="flex items-center gap-2 mb-0.5">
+                                    <input type="checkbox" class="slot-cb w-4 h-4 rounded border-gray-700 bg-black/50 text-indigo-500 focus:ring-indigo-500 cursor-pointer transition" value="${slot.id}" onchange="handleCheckbox(this)">
+                                    <div class="text-[10px] text-gray-500 font-bold tracking-widest cursor-default">SLOT</div>
+                                </div>
+                                <div class="text-2xl font-black text-white leading-none">${slot.id}</div>
+                                <div class="text-[9px] font-mono ${slot.isOffline ? 'text-gray-700/50 italic' : 'text-emerald-400'} mt-1 truncate max-w-[140px]">${slot.status}</div>
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0 ml-2">
+                                ${slot.isLooping ? 
+                                    `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-900/40 text-purple-400 border border-purple-500/50 animate-pulse shadow-[0_0_8px_rgba(168,85,247,0.3)]">🔄 LOOP</span>` : 
+                                    `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-gray-800 text-gray-500 border border-gray-600 shadow-inner">OFFLINE</span>`
+                                }
+                            </div>
+                        </div>
+                        <button onclick="editSlot(${slot.id})" class="w-full bg-black/40 hover:bg-black border border-white/5 hover:border-indigo-500/50 transition-all rounded-xl p-3 flex justify-between items-center group/btn active:scale-[0.98]">
+                            <div class="text-[10px] text-gray-400 group-hover/btn:text-indigo-300 text-left">
+                                <div class="mb-1">📧 <span class="text-white font-bold text-xs">${slot.emails}</span> Emails</div>
+                                <div>🔗 <span class="text-white font-bold text-xs">${slot.links}</span> Links</div>
+                            </div>
+                            <div class="text-gray-600 group-hover/btn:text-white transition-colors">✏️</div>
+                        </button>
+                        ${slot.ip ? 
+                            `<div class="text-[10px] font-mono text-gray-400 mt-3 truncate bg-black/30 p-1.5 rounded-md border border-white/5">IP: <span class="text-white">${slot.ip}</span></div>` : 
+                            `<div class="text-[10px] font-mono text-gray-700 mt-3 italic">Waiting for Agent...</div>`
+                        }
+                    </div>
+                    <div class="grid grid-cols-3 gap-1.5 mt-4">
+                        <button onclick="cmd(${slot.id}, 'login')" class="bg-gradient-to-t from-blue-900 to-blue-700 hover:from-blue-800 hover:to-blue-600 text-white py-1.5 rounded-lg text-[10px] font-bold transition disabled:opacity-30 active:scale-95 shadow-md border border-blue-600/30 ${slot.isOffline ? 'opacity-50 cursor-not-allowed' : ''}" ${slot.isOffline ? 'disabled' : ''}>LOGIN</button>
+                        <button onclick="cmd(${slot.id}, 'loop')" class="bg-gradient-to-t from-purple-900 to-purple-700 hover:from-purple-800 hover:to-purple-600 text-white py-1.5 rounded-lg text-[10px] font-bold transition disabled:opacity-30 active:scale-95 shadow-md border border-purple-600/30 ${slot.isOffline ? 'opacity-50 cursor-not-allowed' : ''}" ${slot.isOffline ? 'disabled' : ''}>LOOP</button>
+                        <button onclick="viewLogs(${slot.id})" class="bg-[#161b22] hover:bg-[#21262d] text-gray-300 py-1.5 rounded-lg text-[10px] font-bold transition active:scale-95 shadow-md border border-gray-700/50">LOGS</button>
+                    </div>
+                    <div class="mt-1.5">
+                        <button onclick="cmd(${slot.id}, 'stop')" class="w-full bg-gradient-to-t from-red-950 to-red-800 hover:from-red-900 hover:to-red-700 text-red-100 py-1.5 rounded-lg text-[10px] font-bold transition active:scale-95 shadow-md border border-red-800/50">STOP</button>
+                    </div>
+                </div>`;
+                container.innerHTML += cardHTML;
+            });
+
+            restoreCheckboxes();
+        }
+
+        function renderBulkModal() {
+            const list = document.getElementById('bulk-slot-list');
+            list.innerHTML = '';
+            
+            allSlots.forEach(slot => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center gap-2 p-2 bg-black/40 rounded border border-emerald-900/30';
+                div.innerHTML = `
+                    <input type="checkbox" class="bulk-slot-cb w-4 h-4 rounded cursor-pointer" value="${slot.id}" />
+                    <label class="text-xs text-gray-300 flex-1 cursor-pointer">
+                        Slot ${slot.id} ${slot.ip ? `(${slot.ip})` : '(offline)'}
+                    </label>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        // ==================== API CALLS ====================
+        async function reloadData() {
+            try {
+                const resp = await fetch(`${API_BASE}/api/slots`);
+                allSlots = await resp.json();
+                
+                const status = await fetch(`${API_BASE}/api/status`);
+                const stats = await status.json();
+                
+                document.getElementById('stat-online').textContent = stats.online;
+                document.getElementById('stat-busy').textContent = stats.busy;
+                document.getElementById('stat-data').textContent = stats.data;
+                
+                renderCards();
+                showToast('Data refreshed', 'info');
+            } catch (e) {
+                showToast('Failed to reload: ' + e.message, 'error');
+            }
+        }
+
+        async function editSlot(slotId) {
+            isModalOpen = true;
+            currentSlot = slotId;
+            document.getElementById('m_slot').innerText = slotId;
+            document.getElementById('modal').classList.remove('hidden');
+            
+            const slot = allSlots.find(s => s.id === slotId);
+            if (slot) {
+                document.getElementById('m_emails').value = slot.emails_file;
+                document.getElementById('m_links').value = slot.links_file;
+            }
+        }
+
+        async function save() {
+            try {
+                const emails = document.getElementById('m_emails').value;
+                const links = document.getElementById('m_links').value;
+                
+                const resp = await fetch(`${API_BASE}/api/slot/${currentSlot}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Auth-Key': AUTH
+                    },
+                    body: JSON.stringify({
+                        emails_file: emails,
+                        links_file: links
+                    })
+                });
+                
+                if (resp.ok) {
+                    showToast(`Slot ${currentSlot} saved!`, 'success');
+                    closeModal();
+                    reloadData();
+                } else {
+                    showToast('Save failed', 'error');
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+        }
+
+        async function saveBulk() {
+            try {
+                const selectedSlots = Array.from(document.querySelectorAll('.bulk-slot-cb:checked')).map(cb => parseInt(cb.value));
+                const emails = document.getElementById('bulk-emails').value;
+                const links = document.getElementById('bulk-links').value;
+                
+                if (selectedSlots.length === 0) {
+                    showToast('Pilih minimal 1 slot', 'warning');
+                    return;
+                }
+                
+                const resp = await fetch(`${API_BASE}/api/bulk/upload`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Auth-Key': AUTH
+                    },
+                    body: JSON.stringify({
+                        slots: selectedSlots,
+                        emails: emails,
+                        links: links
+                    })
+                });
+                
+                if (resp.ok) {
+                    showToast(`Uploaded to ${selectedSlots.length} slots`, 'success');
+                    closeBulkModal();
+                    reloadData();
+                } else {
+                    showToast('Upload failed', 'error');
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+        }
+
+        async function cmd(slotId, action) {
+            try {
+                const resp = await fetch(`${API_BASE}/api/command/${slotId}/${action}`, {
+                    method: 'POST',
+                    headers: {
+                        'X-Auth-Key': AUTH
+                    }
+                });
+                
+                if (resp.ok) {
+                    showToast(`Command ${action} sent to slot ${slotId}`, 'success');
+                    setTimeout(() => reloadData(), 1000);
+                } else {
+                    showToast('Command failed', 'error');
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+        }
+
+        async function massCmd(action) {
+            const slots = Array.from(checkedSlots);
+            if (slots.length === 0) {
+                showToast('Select slots first', 'warning');
+                return;
+            }
+            
+            const confirmed = await showConfirm(`Mass ${action.toUpperCase()}`, `Send to ${slots.length} slots?`);
+            if (!confirmed) return;
+            
+            try {
+                const resp = await fetch(`${API_BASE}/api/mass/command/${action}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Auth-Key': AUTH
+                    },
+                    body: JSON.stringify({ slots: slots })
+                });
+                
+                if (resp.ok) {
+                    showToast(`Mass ${action} executed!`, 'success');
+                    setTimeout(() => reloadData(), 1000);
+                } else {
+                    showToast('Command failed', 'error');
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+        }
+
+        async function viewLogs(slotId) {
+            isModalOpen = true;
+            document.getElementById('logModal').classList.remove('hidden');
+            document.getElementById('logContent').innerText = 'Loading logs...';
+            
+            try {
+                const resp = await fetch(`${API_BASE}/api/logs/${slotId}`, {
+                    headers: { 'X-Auth-Key': AUTH }
+                });
+                const data = await resp.json();
+                document.getElementById('logContent').innerText = data.logs || 'No logs';
+            } catch (e) {
+                document.getElementById('logContent').innerText = 'Error loading logs: ' + e.message;
+            }
+        }
+
+        function handleCheckbox(cb) {
+            const val = parseInt(cb.value);
+            if (cb.checked) {
+                checkedSlots.add(val);
+            } else {
+                checkedSlots.delete(val);
+            }
+            updateSelectionUI();
+        }
+
+        function changeGrid() {
+            const newVal = prompt('Grid Layout (1-20):', currentGrid);
+            if (newVal && parseInt(newVal) >= 1 && parseInt(newVal) <= 20) {
+                currentGrid = parseInt(newVal);
+                localStorage.setItem('ghost_grid', currentGrid);
+                document.documentElement.style.setProperty('--ghost-grid', currentGrid);
+                document.getElementById('grid-display').innerText = `GRID: ${currentGrid}`;
+                showToast(`Grid changed to ${currentGrid}`, 'success');
+            }
+        }
+
+        function changeSlots() {
+            showToast('Max slots: 192 (fixed)', 'info');
+        }
+
+        // ==================== INIT ====================
+        window.addEventListener('DOMContentLoaded', async () => {
+            await reloadData();
+            const gridDisp = document.getElementById('grid-display');
+            if (gridDisp) gridDisp.innerText = `GRID: ${currentGrid}`;
+            
+            // Live indicator
+            const indicator = document.getElementById('live-indicator');
+            indicator.classList.remove('bg-red-500');
+            indicator.classList.add('bg-green-500', 'animate-pulse');
+            
+            // Auto refresh every 5 seconds
+            setInterval(() => reloadData(), 5000);
+        });
+
+        // Expose functions
+        window.editSlot = editSlot;
+        window.viewLogs = viewLogs;
+        window.cmd = cmd;
+        window.massCmd = massCmd;
+        window.toggleSelectAll = toggleSelectAll;
+        window.changeGrid = changeGrid;
+        window.changeSlots = changeSlots;
+        window.openBulkModal = openBulkModal;
+        window.closeModal = closeModal;
+        window.closeLogModal = closeLogModal;
+        window.closeBulkModal = closeBulkModal;
+        window.save = save;
+        window.saveBulk = saveBulk;
+        window.handleCheckbox = handleCheckbox;
+        window.reloadData = reloadData;
+    </script>
+</body>
+</html>
