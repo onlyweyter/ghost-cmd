@@ -1,5 +1,5 @@
 #!/bin/bash
-# GHOST CMD - Agent Installer
+# GHOST CMD - Agent Installer (Ubuntu 22.04 Fixed v2)
 # Run on each agent server
 set -e
 
@@ -22,31 +22,44 @@ if [ -z "$DASHBOARD_URL" ]; then
 fi
 
 # ==========================================
-# 2. System Update & Dependencies (XVFB Fixed)
+# 2. System Update & Dependencies (Clean 22.04)
 # ==========================================
-echo "📦 Updating system packages and installing dependencies..."
+echo "📦 Updating system packages..."
+
 apt-get update && apt-get upgrade -y
 
+# Enable universe repository
+apt-get install -y software-properties-common
+add-apt-repository universe -y
+apt-get update
+
+echo "📦 Installing Chrome + XVFB dependencies..."
 apt-get install -y \
     python3 python3-pip python3-venv git curl wget \
-    xvfb x11-utils libx11-6 libxcb1 libxcomposite1 libxdamage1 \
-    libxrandr2 libxtst6 libnss3 libasound2 libatk1.0-0 \
-    libatk-bridge2.0-0 libgtk-3-0 libgbm1 libxshmfence1 \
-    fonts-liberation libappindicator3-1 libdbusmenu-gtk4
+    xvfb x11-utils \
+    libasound2t64 \
+    libatk1.0-0t64 libatk-bridge2.0-0t64 \
+    libx11-6 libxcb1 libxcomposite1 libxdamage1 libxrandr2 libxtst6 \
+    libnss3 libnspr4 \
+    libgtk-3-0t64 libgbm1 libxshmfence1 \
+    libdbus-1-3 \
+    fonts-liberation ca-certificates libcups2 libdrm2
 
-echo "✅ Core dependencies & XVFB installed"
+echo "✅ Dependencies installed successfully"
 
 # ==========================================
 # 3. Install Google Chrome
 # ==========================================
 echo "🌐 Installing Google Chrome..."
 if ! command -v google-chrome &> /dev/null; then
-    echo "📦 Installing Chrome via official repository..."
+    echo "📦 Adding Google Chrome repository..."
     wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+    
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+    
     apt-get update
     apt-get install -y google-chrome-stable
-    echo "✅ Google Chrome installed successfully"
+    echo "✅ Google Chrome installed"
 else
     echo "✅ Google Chrome already installed"
 fi
@@ -66,11 +79,10 @@ pip install -r requirements.txt
 # 5. Create directories
 # ==========================================
 echo "📁 Creating directories..."
-mkdir -p chrome_profiles
-mkdir -p logs
+mkdir -p chrome_profiles logs
 
 # ==========================================
-# 6. Create environment file
+# 6. Create .env file
 # ==========================================
 echo "⚙️ Creating .env configuration..."
 cat > .env <<EOF
@@ -79,7 +91,7 @@ AUTH_KEY=GHOST_SECRET_2026
 EOF
 
 # ==========================================
-# 7. Create Agent Systemd Service
+# 7. Create Systemd Service
 # ==========================================
 echo "⚙️ Creating ghost-agent systemd service..."
 
@@ -119,22 +131,17 @@ sleep 3
 # 9. Final Message
 # ==========================================
 echo ""
-echo "✅ Agent Installation Complete!"
+echo "✅ Agent Installation Complete! (Ubuntu 22.04)"
 echo "============================"
 echo "📊 Dashboard URL : $DASHBOARD_URL"
 echo "🚀 Agent running on http://localhost:7860"
 echo ""
-echo "🔧 Service Management:"
+echo "🔧 Service commands:"
 echo "   systemctl status ghost-agent"
 echo "   systemctl restart ghost-agent"
-echo "   systemctl stop ghost-agent"
-echo ""
-echo "📋 Logs:"
 echo "   journalctl -u ghost-agent -f"
 echo ""
-echo "🎉 Agent siap mendaftar ke Dashboard secara otomatis."
+echo "🎉 Selesai!"
 echo ""
 
-# Show current status
-echo "Current service status:"
 systemctl status ghost-agent --no-pager -l
